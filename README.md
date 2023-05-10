@@ -1,3 +1,3 @@
 # distribution-match
-Data-feature Distribution Matching for Eﬀicient and
+Data-feature Distribution Matching by optimal transport for Eﬀicient and
 Robust Dataset Selection
