@@ -1,8 +1,4 @@
-# distribution--------match
-Data-feature Distribution Matching by optimal transport for Eﬀicient and
-Robust Dataset Selection
-
-
+# distribution match
 ### Datasets
 It contains a series of other popular computer vision datasets, namely MNIST, QMNIST, FashionMNIST, SVHN, CIFAR10, CIFAR100 and TinyImageNet and ImageNet.
 
