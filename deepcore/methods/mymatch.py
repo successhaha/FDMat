@@ -2,11 +2,28 @@ from .earlytrain import EarlyTrain
 import torch, time
 import numpy as np
 from ..nets.nets_utils import MyDataParallel
-import pickle
 import collections
-from ..methods.methods_utils.opt import *
+from torch import tensor, long
+def compute_optimal_transport(M, r, c, epsilon=1e-6, lam=4):    
+        r = r.cuda() # 5 50000
+        c = c.cuda() # 5 10
+        n_runs, n, m = M.shape  # 5, 50000, 10
+        P = torch.exp(- lam * M)
+        P /= P.view((n_runs, -1)).sum(1).unsqueeze(1).unsqueeze(1)                        
+        u = torch.zeros(n_runs, n).cuda()
+        maxiters = 1000
+        iters = 1
+        # normalize this matrix
+        while torch.max(torch.abs(u - P.sum(2))) > epsilon:
+            u = P.sum(2)
+            P *= (r / u).view((n_runs, -1, 1))
+            P *= (c / P.sum(1)).view((n_runs, 1, -1))
+            if iters == maxiters:
+                break
+            iters = iters + 1
+        return P, P*M #torch.sum(P * M)
 
-class mymatch(EarlyTrain):
+class mymatch_2(EarlyTrain):
     def __init__(self, dst_train, args, fraction=0.5, random_seed=None, epochs=200, repeat=5,
                  specific_model=None, dst_val=None,balance=False, **kwargs):
         super().__init__(dst_train, args, fraction, random_seed, epochs, specific_model)
@@ -29,9 +46,8 @@ class mymatch(EarlyTrain):
         if isinstance(self.model, MyDataParallel):
             self.model = self.model.module
 
-    """
-    处理数据
-    """
+
+    # load data
     def _load_data(self, save_features):
         data = save_features
         labels = [np.full(shape=len(data[key]), fill_value=key) for key in data]
@@ -42,13 +58,11 @@ class mymatch(EarlyTrain):
         dataset["index"] = torch.LongTensor(indexs)
         dataset["labels"] = torch.LongTensor(np.concatenate(labels))
         return dataset
-    """
-    将数据传入模型开始处理数据
-    """
+
     def define_data(self, val): 
         self.model.embedding_recorder.record_embedding = True
         self.model.eval()
-        cfg = {}
+        # if you have a valuation
         if val:
             val_batch_loader = torch.utils.data.DataLoader(self.dst_val, batch_size=self.args.selection_batch,
                                                            num_workers=self.args.workers)
@@ -86,12 +100,13 @@ class mymatch(EarlyTrain):
                 output_dict = collections.defaultdict(list)
                 j = 0
                 # reload train set
-                for k in range(2):
+                for k in range(1):
                     for i, (inputs, labels) in enumerate(train_batch_loader):
                         inputs = inputs.to(self.args.device)
                         labels = labels.to(self.args.device)
                         _ = self.model(inputs)
-                        if self.args.approximate: # 取最后一层特征
+                        # 只取最后一层的特征
+                        if self.args.approximate:
                             outputs = _
                             outputs = outputs.cpu().data.numpy()
                             for out, label in zip(outputs, labels):
@@ -105,153 +120,95 @@ class mymatch(EarlyTrain):
                                 indx_feature = [j, out]
                                 if k==0:
                                     save_features.append(out)
-                                    # print("labels___:", label.item())
                                     save_labels.append(int(label.item()))
                                 j += 1
                                 output_dict[label.item()].append(indx_feature)
-        # out_features = "/home/xww/tsne-pytorch/features.csv"
-        # print("____________________", len(save_features), len(save_labels))
-        # np.savetxt(out_features,np.array(save_features))
-        # out_labels = "/home/xww/tsne-pytorch/labels.csv"
-        # np.savetxt(out_labels, save_labels)
-        # print("=====>  save end")
         self.model.train()
         self.model.embedding_recorder.record_embedding = False
 
+        # getting data index labels
         dataset = self._load_data(output_dict)
-        print("**************dataset description*************")
-        print(" train set :", len(self.dst_train.targets))
-        print(" labels : ", len(torch.unique(dataset["labels"])), dataset["labels"].shape[0])
-        print("***************description********************")
-        # print("_______________0", torch.unique(dataset["labels"]), dataset["labels"].shape[0], len(torch.unique(dataset["labels"])), int(len(self.dst_train.targets)))
-        _min_examples = int(dataset["labels"].shape[0]) / len(torch.unique(dataset["labels"]))
-        if val:
-            cfg["shot"] = int(len(self.dst_val) / len(torch.unique(dataset["labels"])))
-        else:
-            cfg["shot"] = int(len(self.dst_train.targets) / len(torch.unique(dataset["labels"])))
-        cfg["ways"] = len(torch.unique(dataset["labels"]))
-        cfg["queries"] = int(len(self.dst_train.targets) / len(torch.unique(dataset["labels"])))
-        print("=> _min_examples : ", _min_examples)
-        print("=> n_ways : ", cfg["ways"])
-        print("=> shot : ", cfg["shot"])
-        print("=> queries : ", cfg["queries"])
-        data = torch.zeros((0, int(_min_examples), dataset["data"].shape[1]))
         labels = dataset["labels"].clone()
-        index_all = torch.zeros(0, int(_min_examples))
         classes_name = []
+
+        each_class_examples = []
+        save_each_data = []
+        save_each_data_class = []
         while labels.shape[0] > 0:
             indices = torch.where(dataset["labels"] == labels[0])[0]
-            data = torch.cat([data, dataset["data"][indices, :]
-            [:int(_min_examples)].view(1, int(_min_examples), -1)], dim=0)
-            index_all = torch.cat([index_all, dataset["index"][indices].view(1, int(_min_examples))], dim=0)
+            each_class_examples.append(len(indices))
+            save_each_data.append(dataset["data"][indices,:])
+            save_each_data_class.append(indices)
             classes_name.append(int(dataset["labels"][int(indices[0])]))
-            # print(" the i-class index : ", index_all.shape, "classes_name :", dataset["labels"][int(indices[0])])
             indices = torch.where(labels != labels[0])[0]
             labels = labels[indices]
-        dataset_setting = None
-        dataset_setting = torch.zeros((cfg['ways'], cfg['shot'] + cfg['queries'], data.shape[2]))
-        for i in range(cfg["ways"]):
-            dataset_setting[i] = data[classes_name[i], :, :][:cfg['shot'] + cfg['queries']]
-            # print("=======>test===:", dataset_setting[i])
-        return dataset_setting, index_all.numpy().astype(int), cfg
+        return   save_each_data, save_each_data_class
     def proccess_data(self):
-        ndatas, all_index, cfg = self.define_data(val=False)  # 10, 10000, 512
-        # print("======>111111111+++", ndatas[1])
-        ndatas = ndatas.unsqueeze(0)
-        print("=> redefine data shape : ", ndatas.shape)
-        n_runs = 1
-        n_lsamples = cfg["ways"] * cfg["shot"]
-        n_usamples = cfg["ways"] * cfg["queries"]
-        n_samples = n_lsamples + n_usamples
-        ndatas = ndatas.permute(0,2,1,3).reshape(n_runs, n_samples, -1) #[3, 10000, 640]
-        labels = torch.arange(cfg["ways"]).view(1,1,cfg["ways"]).expand(n_runs,cfg["shot"]+cfg["queries"],cfg["ways"]).clone().view(n_runs, n_samples)
-        
+        new_datas, all_data_index = self.define_data(val=False)  # ndatas-->10, 10000, 512
         # Power transform
-        beta = 0.5
-        ndatas[:,] = torch.pow(ndatas[:,]+1e-6, beta)
-        # ndatas = QRreduction(ndatas)
-        n_nfeat = ndatas.size(2)
-        ndatas = centerDatas(ndatas, n_lsamples)  #中心化
-    
-        print("=> size of the datas...", ndatas.size())
-       
-        # switch to cuda
-        ndatas = ndatas.cuda()
-        print("========> ndatas:", ndatas.shape)  #（1，200000，512）
-        labels = labels.cuda()
-        
-        # # ***************Split Blocks MAP************
-        # num, test_nums, feature_size = ndatas.size()
-        # n = 10
-        # return_result = torch.zeros((num,test_nums, feature_size)).cuda()
-        # temp_ndatas = torch.zeros((num,int(test_nums/4), feature_size)).cuda()
-        # for i in range(n):
-        #     temp_ndatas = ndatas[:,i*int(test_nums/10):(i+1)*int(test_nums/10),:]
-        #     print("show shape____", temp_ndatas.shape)
-        #     lam = 10
-        #     model = GaussianModel(cfg["ways"], lam, temp_ndatas, n_runs, cfg["shot"], cfg["queries"], n_nfeat, all_index, labels)
-        #     model.initFromLabelledDatas()
-        #     _, result = model.getProbas()
-        #     print("sssssssss = ", type(result))
-        # # ********************end*********************
-        #MAP
-        lam = 10
-        model = GaussianModel(cfg["ways"], lam, ndatas, n_runs, cfg["shot"], cfg["queries"], n_nfeat, all_index, labels)
-        model.initFromLabelledDatas()
-        _, result = model.getProbas()
-        return result, cfg
-        # alpha = 0.2
-        # optim = MAP(labels, n_runs, n_ways, n_shot, n_queries, alpha)
+        for i in range(len(new_datas)):
+            beta = 0.5
+            new_datas[i] = torch.pow(new_datas[i]+1e-6, beta)
+            # new_datas[i] = new_datas/new_datas.norm(dim=2, keepdim=True)
+        # CenterDatas
+        cat_datas = torch.cat(new_datas, dim=0)
+        new_datas_mean = cat_datas.mean(0, keepdim=True)
+        new_datas_norm = torch.norm(cat_datas,2, 1)[:, None]
+        num = 0
+        new_datas_indices = [0]
+        class_indices = []
+        for i in range(len(new_datas)):
+            num += len(new_datas[i])
+            new_datas_indices.append(num)
+            class_indices.append(len(new_datas[i]))
+        data_mus = []
+        for i in range(len(new_datas)):
+            new_datas[i] = ((cat_datas[new_datas_indices[i]:new_datas_indices[i+1],:] - new_datas_mean)/new_datas_norm[new_datas_indices[i]:new_datas_indices[i+1],:]) #(10000, 1)
+            data_mus.append(new_datas[i].mean(0).unsqueeze(0))
+        data_mus = torch.cat(data_mus, dim=0)  #(10, 512)
+
+
+        datas = torch.cat(new_datas, dim=0).unsqueeze(0)
+        mus = data_mus.unsqueeze(0) #(1,10,512)
+
+        # define data 
+        all_samples = datas.size()[1]
+        num_class = data_mus.size()[0]
+        dist = torch.zeros((1,all_samples,num_class)).cuda()
+        for i in range(num_class):
+            dist[:,i*int(all_samples/num_class):(i+1)*int(all_samples/num_class),:] = (datas[:,i*int(all_samples/num_class):(i+1)*int(all_samples/num_class),].unsqueeze(2)-mus.unsqueeze(1)).norm(dim=3).pow(2)
+        n_runs = 1
+        n_usamples = int(all_samples)
+        # Optimal Transport
+        r = torch.ones(n_runs, n_usamples) 
+        c = torch.ones(n_runs, num_class) * torch.tensor(class_indices)
+        p_xj_test, all_sum = compute_optimal_transport(dist[:, :], r, c, epsilon=1e-6, lam=self.args.lmda)
+        result = all_sum.norm(dim=2).pow(2)[0]
+        return result
 
     def finish_run(self):  # 训练一定的epoch之后开始数据选择
         self.model.embedding_recorder.record_embedding = True  # recording embedding vector
         self.model.eval()
-        ndatas, all_index, _ = self.define_data(val=False)
-        result, cfg = self.proccess_data()
-        return result, cfg, all_index
+        b, all_index= self.define_data(val=False)
+        result = self.proccess_data()
+        return result, all_index
     def select(self, **kwargs):
         # Initialize a matrix to save norms of each sample on idependent runs
         self.run()
-        result, cfg, all_index = self.finish_run()
-        n_lsamples = cfg["ways"] * cfg["shot"]
-        n_usamples = cfg["ways"] * cfg["queries"]
-        n_samples = n_lsamples + n_usamples
-        print("=> the result = ", result, len(result))
+        result,  all_index = self.finish_run()
         self.train_indx = np.arange(self.n_train)
         if not self.balance:
             top_examples = np.array([], dtype=np.int64)
-            print("======*******======>>>:", torch.argsort(result).cpu().numpy())
-            # index_save = self.train_indx[(torch.argsort(result)).cpu().numpy()][:self.coreset_size]
-            index_save = self.train_indx[(torch.argsort(result)).cpu().numpy()][-self.coreset_size:]
-            print("======&&&&&&&======>>>:", index_save)
+            index_save = self.train_indx[(torch.argsort(result)).cpu().numpy()][:self.coreset_size]
             top_examples = np.append(top_examples, index_save)
-            # with open("./select_index.txt", "w") as f1:
-            #     f1.write(str(tuple(index_save))+str("\n"))
-            #     f1.close()
-            # with open("./select_context.txt", "w") as f:
-            #     index_save1, _ = torch.sort(result)
-            #     f.write(str(tuple(result.cpu().numpy()))+str("\n"))
-            #     f.close()
+
         else:
             top_examples = np.array([], dtype=np.int64)
             for c in range(self.num_classes):
-                c_indx = self.train_indx[self.dst_train.targets == c] 
+                c_indx = torch.tensor(all_index[c])
                 budget = round(self.fraction * len(c_indx))
-                print("=> budget : ", budget)
-                index_save = (torch.argsort(result[all_index[c][cfg["shot"]:]-int(n_lsamples)]).cpu().numpy())[:budget]
+                result = tensor(result, dtype=long)
+                index_save = (torch.argsort(result[c_indx]).cpu().numpy())[:budget]
+                index_save = c_indx[index_save]
                 top_examples = np.append(top_examples, index_save)
-                # c_indx = self.train_indx[self.dst_train.targets == c]
-                # budget = round(self.fraction * len(c_indx))
-                # print("___________", c_indx, budget, np.argsort(result[[]-int(n_lsamples)]))
-                # top_examples = np.append(top_examples, c_indx[np.argsort(result[all_index[c][cfg["shot"]:]-int(n_lsamples)])][:budget])
-            with open("./select_context_balance.txt", "w") as f:
-                for c in range(self.num_classes):
-                    c_index = self.train_indx[self.dst_train.targets == c] 
-                    budget = round(self.fraction * len(c_index))
-                    # index_save = self.train_indx[(torch.argsort(result)).cpu().numpy()]
-    
-                    index_save = torch.argsort(result[c_index]).cpu().numpy()
-                    print("==> show result = ", index_save)
-                    f.write(str(tuple(index_save))+str("\n"))
-                f.close()
         return {"indices": top_examples, "scores": result}
