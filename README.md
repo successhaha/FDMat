@@ -1,5 +1,7 @@
 ###
 Feature Distribution Matching by Optimal Transport for Effective and Robust Coreset Selection(AAAI2024)
+![图片](https://github.com/successhaha/FDMatch/assets/59720319/6b00fc77-a019-4def-a97e-cd8239ecf1b5)
+
 ### Introduction
 To advance the research of coreset selection in deep learning, we follow a code library named **DeepCore**[14], an extensive and extendable code library, for coreset selection in deep learning, reproducing dozens of popular and advanced coreset selection methods and enabling a fair comparison of different methods in the same experimental settings. **DeepCore** is highly modular, allowing to add new architectures, datasets, methods and learning scenarios easily. It is built on PyTorch.   
 
