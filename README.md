@@ -16,7 +16,7 @@ CUDA_VISIBLE_DEVICES=0 python -u main.py --fraction 0.1 --dataset CIFAR10 --data
 ```
 Resuming interuppted training with argument ```--resume```.
 ```sh
-CUDA_VISIBLE_DEVICES=0 python -u main.py --fraction 0.1 --dataset CIFAR10 --data_path ~/datasets --num_exp 5 --workers 10 --optimizer SGD -se 10 --selection mymatch_2 --model ResNet18 --lr 0.1 -sp ./result --batch 128
+CUDA_VISIBLE_DEVICES=0 python -u main.py --fraction 0.1 --dataset CIFAR10 --data_path ~/datasets --num_exp 5 --workers 10 --optimizer SGD -se 10 --selection mymatch_2 --model ResNet18 --lr 0.1 -sp ./result --batch 128 -- resume ~/checkpoint_path
 ```
 
 ### Example
