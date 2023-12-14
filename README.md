@@ -7,7 +7,7 @@ We follow a code library, **DeepCore**[14], an extensive and extendable code lib
 ![图片](https://github.com/successhaha/FDMatch/blob/main/deepcore/Figure/figure_1.png)
 We list the methods in DeepCore, they are 1) geometry based methods Contextual Diversity (CD), Herding  and k-Center Greedy; 2) uncertainty scores; 3) error based methods Forgetting  and GraNd score ; 4) decision boundary based methods Cal  and DeepFool ; 5) gradient matching based methods Craig, GradMatch and LCMat ; 6) bilevel optimiza- tion methods Glister ; and 7) Submodularity based Methods (GC) and Facility Location (FL) functions. we also have Random selection as the baseline.
 ### Datasets
-It contains a series of other popular computer vision datasets, namely MNIST, CINIC, QMNIST, FashionMNIST, SVHN, CIFAR10, CIFAR100, TinyImageNet and ImageNet.
+It contains a series of other popular computer vision datasets, namely CIFAR10, CIFAR100, TinyImageNet, ImageNet, MNIST, CINIC, QMNIST, FashionMNIST and SVHN.
 
 ### Example
 Selecting with FDMat and training on the coreset with fraction 0.1.
