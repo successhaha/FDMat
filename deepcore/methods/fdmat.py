@@ -23,7 +23,7 @@ def compute_optimal_transport(M, r, c, epsilon=1e-6, lam=4):
             iters = iters + 1
         return P, P*M #torch.sum(P * M)
 
-class mymatch_2(EarlyTrain):
+class fdmat(EarlyTrain):
     def __init__(self, dst_train, args, fraction=0.5, random_seed=None, epochs=200, repeat=5,
                  specific_model=None, dst_val=None,balance=False, **kwargs):
         super().__init__(dst_train, args, fraction, random_seed, epochs, specific_model)
