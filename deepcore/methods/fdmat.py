@@ -62,7 +62,7 @@ class fdmat(EarlyTrain):
     def define_data(self, val): 
         self.model.embedding_recorder.record_embedding = True
         self.model.eval()
-        # if you have a valuation
+        # if you use validation sets (the default is False)
         if val:
             val_batch_loader = torch.utils.data.DataLoader(self.dst_val, batch_size=self.args.selection_batch,
                                                            num_workers=self.args.workers)
@@ -99,13 +99,13 @@ class fdmat(EarlyTrain):
             with torch.no_grad():
                 output_dict = collections.defaultdict(list)
                 j = 0
-                # reload train set
-                for k in range(1):
+                # loading training samples
+                # for k in range(1):
                     for i, (inputs, labels) in enumerate(train_batch_loader):
                         inputs = inputs.to(self.args.device)
                         labels = labels.to(self.args.device)
                         _ = self.model(inputs)
-                        # 只取最后一层的特征
+                        # getting the feature embedding of the last layer 
                         if self.args.approximate:
                             outputs = _
                             outputs = outputs.cpu().data.numpy()
@@ -171,7 +171,7 @@ class fdmat(EarlyTrain):
         datas = torch.cat(new_datas, dim=0).unsqueeze(0)
         mus = data_mus.unsqueeze(0) #(1,10,512)
 
-        # define data 
+        # define cost matrix
         all_samples = datas.size()[1]
         num_class = data_mus.size()[0]
         dist = torch.zeros((1,all_samples,num_class)).cuda()
@@ -186,7 +186,7 @@ class fdmat(EarlyTrain):
         result = all_sum.norm(dim=2).pow(2)[0]
         return result
 
-    def finish_run(self):  # 训练一定的epoch之后开始数据选择
+    def finish_run(self):  # train a few epochs to get a pre-trained model and to select coreset
         self.model.embedding_recorder.record_embedding = True  # recording embedding vector
         self.model.eval()
         b, all_index= self.define_data(val=False)
