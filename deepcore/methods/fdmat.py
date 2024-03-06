@@ -58,7 +58,8 @@ class fdmat(EarlyTrain):
         dataset["labels"] = torch.LongTensor(np.concatenate(labels))
         return dataset
 
-    def define_data(self, val): # Define data format
+    # Define data format
+    def define_data(self, val): 
         self.model.embedding_recorder.record_embedding = True
         self.model.eval()
         train_batch_loader = torch.utils.data.DataLoader(self.dst_train, batch_size=self.args.selection_batch,
