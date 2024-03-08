@@ -134,7 +134,6 @@ class CoresetMethod(object):
 12. Toneva, M., Sordoni, A., des Combes, R.T., Trischler, A., Bengio, Y., Gordon, G.J.: An empirical study of example forgetting during deep neural network learning. In: ICLR (2018)
 13. Welling, M.: Herding dynamical weights to learn. In: Proceedings of the 26th Annual International Conference on Machine Learning. pp. 1121–1128 (2009)
 14. Seungjae, C.: Loss-Curvature matching for dataset selection and condensation. In: AISTATS (2023)
-15. Chenchen, C.: **Deepcore**: A comprehensive library for coreset selection in deep learning. In: DESA(2023)
 
     
 Contact the author e-mail：xiaowwhit@gmail.com or 2878570391@qq.com
