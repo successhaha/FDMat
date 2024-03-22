@@ -96,43 +96,42 @@ class fdmat(EarlyTrain):
         # getting data index labels
         dataset = self._load_data(output_dict)
         labels = dataset["labels"].clone()
-        classes_name = []
 
-        each_class_examples = []
-        save_each_data = []
-        save_each_data_class = []
+        each_sample = []
+        each_class = []
         while labels.shape[0] > 0:
             indices = torch.where(dataset["labels"] == labels[0])[0]
-            each_class_examples.append(len(indices))
-            save_each_data.append(dataset["data"][indices,:])
-            save_each_data_class.append(indices)
-            classes_name.append(int(dataset["labels"][int(indices[0])]))
+            each_sample.append(dataset["data"][indices,:])
+            each_class.append(indices)
             indices = torch.where(labels != labels[0])[0]
             labels = labels[indices]
-        return save_each_data, save_each_data_class
+        return each_sample, each_class
+    
     def proccess_data(self): # 
-        new_datas, all_data_index = self.define_data(val=False)  
+        new_data, all_data_index = self.define_data(val=False)  
+
         # Power transform
-        for i in range(len(new_datas)):
+        for i in range(len(new_data)):
             beta = 0.5
-            new_datas[i] = torch.pow(new_datas[i]+1e-6, beta)
+            new_data[i] = torch.pow(new_data[i]+1e-6, beta)
+        
         # CenterDatas
-        cat_datas = torch.cat(new_datas, dim=0)
-        new_datas_mean = cat_datas.mean(0, keepdim=True)
-        new_datas_norm = torch.norm(cat_datas,2, 1)[:, None]
+        cat_data = torch.cat(new_data, dim=0)
+        new_data_mean = cat_data.mean(0, keepdim=True)
+        new_data_norm = torch.norm(cat_data,2, 1)[:, None]
         num = 0
-        new_datas_indices = [0]
+        new_data_indices = [0]
         class_indices = []
-        for i in range(len(new_datas)):
-            num += len(new_datas[i])
-            new_datas_indices.append(num)
-            class_indices.append(len(new_datas[i]))
+        for i in range(len(new_data)):
+            num += len(new_data[i])
+            new_data_indices.append(num)
+            class_indices.append(len(new_data[i]))
         data_mus = []
-        for i in range(len(new_datas)):
-            new_datas[i] = ((cat_datas[new_datas_indices[i]:new_datas_indices[i+1],:] - new_datas_mean)/new_datas_norm[new_datas_indices[i]:new_datas_indices[i+1],:]) #(10000, 1)
-            data_mus.append(new_datas[i].mean(0).unsqueeze(0))
+        for i in range(len(new_data)):
+            new_data[i] = ((cat_data[new_data_indices[i]:new_data_indices[i+1],:] - new_data_mean)/new_data_norm[new_data_indices[i]:new_data_indices[i+1],:]) #(10000, 1)
+            data_mus.append(new_data[i].mean(0).unsqueeze(0))
         data_mus = torch.cat(data_mus, dim=0)  
-        datas = torch.cat(new_datas, dim=0).unsqueeze(0)
+        datas = torch.cat(new_data, dim=0).unsqueeze(0)
         mus = data_mus.unsqueeze(0) 
 
         # define cost matrix
@@ -155,6 +154,7 @@ class fdmat(EarlyTrain):
         self.model.embedding_recorder.record_embedding = True  # recording embedding vector
         self.model.eval()
         b, all_index= self.define_data(val=False)
+        print("********* start selection *********")
         result = self.proccess_data()
         return result, all_index
     def select(self, **kwargs):
