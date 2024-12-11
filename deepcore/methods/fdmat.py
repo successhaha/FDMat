@@ -75,21 +75,21 @@ class fdmat(EarlyTrain):
                 labels = labels.to(self.args.device)
                 outputs = self.model(inputs)
                 # getting the feature embedding of the last layer 
-                if self.args.approximate:
-                    outputs = outputs.cpu().data.numpy()
-                    for out, label in zip(outputs, labels):
-                        indx_feature = [j, out]
-                        j += 1
-                        output_dict[label.item()].append(indx_feature)
-                else:
-                    outputs = self.model.embedding_recorder.embedding
-                    outputs = outputs.cpu().data.numpy()
-                    for out, label in zip(outputs, labels):
-                        indx_feature = [j, out]
-                        save_features.append(out)
-                        save_labels.append(int(label.item()))
-                        j += 1
-                        output_dict[label.item()].append(indx_feature)
+                # if self.args.approximate:
+                #     outputs = outputs.cpu().data.numpy()
+                #     for out, label in zip(outputs, labels):
+                #         indx_feature = [j, out]
+                #         j += 1
+                #         output_dict[label.item()].append(indx_feature)
+                # else:
+                outputs = self.model.embedding_recorder.embedding
+                outputs = outputs.cpu().data.numpy()
+                for out, label in zip(outputs, labels):
+                    indx_feature = [j, out]
+                    save_features.append(out)
+                    save_labels.append(int(label.item()))
+                    j += 1
+                    output_dict[label.item()].append(indx_feature)
         self.model.train()
         self.model.embedding_recorder.record_embedding = False
 
